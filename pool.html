@@ -1,0 +1,1270 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pool Rooms</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { overflow:hidden; background:#0a1214; font-family:'Helvetica Neue',Arial,sans-serif; }
+#canvas { display:block; width:100vw; height:100vh; }
+#ui { position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:10; }
+#btn-add {
+  pointer-events:all; cursor:pointer;
+  background:transparent; border:1.5px solid rgba(255,255,255,0.85); border-radius:50%;
+  width:44px; height:44px; color:#fff; font-size:24px;
+  text-shadow:0 1px 3px rgba(80,80,100,0.6),0 0 8px rgba(255,255,255,0.7);
+  box-shadow:0 3px 12px rgba(40,50,70,0.5),inset 0 1px 0 rgba(255,255,255,0.15);
+  transition:all 0.2s; display:flex; align-items:center; justify-content:center;
+}
+#btn-add:hover { transform:rotate(90deg); background:rgba(255,255,255,0.08); }
+
+#modal-overlay {
+  position:fixed; top:0; left:0; width:100%; height:100%;
+  display:none; align-items:center; justify-content:center; pointer-events:all; z-index:20;
+}
+#modal-overlay.active { display:flex; }
+#modal {
+  background:transparent; border:1.5px solid rgba(255,255,255,0.85); border-radius:16px;
+  padding:28px 32px; min-width:320px;
+  box-shadow:0 8px 40px rgba(0,0,0,0.4),inset 0 1px 0 rgba(255,255,255,0.2); color:#fff;
+}
+#modal h3 { font-size:14px; letter-spacing:2px; text-transform:uppercase; margin-bottom:20px;
+  text-shadow:0 0 10px rgba(255,255,255,0.6); font-weight:300; }
+.modal-options { display:flex; gap:12px; margin-bottom:20px; flex-wrap:wrap; }
+.modal-opt {
+  cursor:pointer; pointer-events:all; background:transparent;
+  border:1.5px solid rgba(255,255,255,0.6); border-radius:8px; padding:10px 16px;
+  color:#fff; font-size:13px;
+  text-shadow:0 1px 3px rgba(80,80,100,0.5),0 0 6px rgba(255,255,255,0.5);
+  box-shadow:0 3px 10px rgba(40,50,70,0.4),inset 0 1px 0 rgba(255,255,255,0.1);
+  transition:all 0.2s; display:flex; align-items:center; gap:8px;
+}
+.modal-opt:hover { background:rgba(255,255,255,0.1); border-color:rgba(255,255,255,0.9); }
+.modal-opt.selected { background:rgba(255,255,255,0.15); border-color:#fff; }
+#text-input-wrap { display:none; margin-bottom:16px; }
+#text-input-wrap.active { display:block; }
+#text-input {
+  width:100%; background:transparent; border:none;
+  border-bottom:1.5px solid rgba(255,255,255,0.5);
+  color:#fff; font-size:14px; padding:6px 0; outline:none;
+}
+#text-input::placeholder { color:rgba(255,255,255,0.35); }
+.modal-actions { display:flex; gap:10px; justify-content:flex-end; }
+.modal-btn {
+  cursor:pointer; pointer-events:all; background:transparent;
+  border:1.5px solid rgba(255,255,255,0.6); border-radius:8px; padding:8px 20px;
+  color:#fff; font-size:13px;
+  text-shadow:0 1px 3px rgba(80,80,100,0.4),0 0 6px rgba(255,255,255,0.4);
+  box-shadow:0 3px 10px rgba(40,50,70,0.4),inset 0 1px 0 rgba(255,255,255,0.1);
+  transition:all 0.2s;
+}
+.modal-btn:hover { background:rgba(255,255,255,0.1); }
+.modal-btn.primary { border-color:rgba(255,255,255,0.9); text-shadow:0 0 10px rgba(255,255,255,0.8); }
+
+#joystick {
+  position:fixed; bottom:30px; left:50%; transform:translateX(-50%);
+  pointer-events:all; display:grid;
+  grid-template-columns:44px 44px 44px; grid-template-rows:44px 44px 44px;
+  gap:6px; align-items:center; justify-items:center;
+}
+.jbtn {
+  cursor:pointer; background:transparent; border:1.5px solid rgba(255,255,255,0.75);
+  border-radius:8px; width:44px; height:44px; color:#fff; font-size:16px;
+  display:flex; align-items:center; justify-content:center;
+  text-shadow:0 1px 3px rgba(60,70,90,0.6),0 0 8px rgba(255,255,255,0.7);
+  box-shadow:0 4px 14px rgba(30,50,70,0.5),inset 0 1px 0 rgba(255,255,255,0.15);
+  transition:all 0.12s; user-select:none;
+}
+.jbtn:active,.jbtn.pressed { background:rgba(255,255,255,0.15); transform:scale(0.92); }
+#hint {
+  position:fixed; bottom:160px; left:50%; transform:translateX(-50%);
+  color:rgba(255,255,255,0.4); font-size:11px; letter-spacing:1.5px; text-transform:uppercase;
+  pointer-events:none; transition:opacity 1s;
+}
+
+/* 沉浸模式开关 — 仅在触摸设备显示 */
+#btn-immersive {
+  display:none;
+  position:fixed; top:72px; right:20px; pointer-events:all; cursor:pointer;
+  background:transparent; border:1.5px solid rgba(255,255,255,0.85); border-radius:10px;
+  padding:7px 12px; color:#fff; font-size:11px; letter-spacing:1px;
+  text-shadow:0 1px 3px rgba(80,80,100,0.5),0 0 8px rgba(255,255,255,0.7);
+  box-shadow:0 3px 12px rgba(40,50,70,0.5),inset 0 1px 0 rgba(255,255,255,0.15);
+  transition:all 0.2s; user-select:none; line-height:1.4;
+  white-space:nowrap;
+}
+#btn-immersive.on  { border-color:rgba(120,220,255,0.9); color:rgba(180,240,255,1); box-shadow:0 3px 16px rgba(80,180,255,0.35),inset 0 1px 0 rgba(255,255,255,0.2); }
+#btn-immersive.off { opacity:0.55; }
+@media (pointer:coarse) { #btn-immersive { display:flex; align-items:center; gap:6px; } }
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<div id="ui">
+
+  <div id="btn-immersive" class="on">🔄 沉浸</div>
+  <div id="modal-overlay">
+    <div id="modal">
+      <h3>投入水中</h3>
+      <div class="modal-options">
+        <div class="modal-opt" data-type="ball">球</div>
+        <div class="modal-opt" data-type="flower">花</div>
+        <div class="modal-opt" data-type="text">字</div>
+      </div>
+      <div id="text-input-wrap">
+        <input id="text-input" type="text" placeholder="输入漂浮的文字..." maxlength="30">
+      </div>
+      <div class="modal-actions">
+        <div class="modal-btn" id="btn-cancel">取消</div>
+        <div class="modal-btn primary" id="btn-drop">投入</div>
+      </div>
+    </div>
+  </div>
+  <div id="joystick">
+    <div></div><div class="jbtn" data-dir="forward">↑</div><div></div>
+    <div class="jbtn" data-dir="left">←</div>
+    <div id="btn-add">+</div>
+    <div class="jbtn" data-dir="right">→</div>
+    <div></div><div class="jbtn" data-dir="backward">↓</div><div></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+'use strict';
+// ════════════════════════════════════════════════════════════════
+// WORLD CONSTANTS  (单位: 米)
+// ════════════════════════════════════════════════════════════════
+const FLOOR_Y       =  0.0;
+const WATER_Y       =  0.5;
+const EYE_Y         =  1.5;
+const CEIL_Y        =  6.5;   // 有天花板区域
+const CEIL_THICK    =  2.0;  // 天花板厚度 — 视觉上2m厚靠fog实现
+const BUILD_H       =  6.5;   // 建筑物高度(消失在雾中)
+const FOG_START     =  4.5;   // 雾从距地面4.5m开始 (世界Y)
+const FOG_FULL      =  6.5;   // 距地面6.5m完全黑
+const CHUNK         =  8.0;  // 区块大小
+const VIEW_DIST     =  5;
+const STRUCT_PROB   =  0.7;
+const MOVE_DIST     =  CHUNK * 0.5;  // 每次移动0.5个区块
+const ANIM_DUR      =  1.0;
+
+// ════════════════════════════════════════════════════════════════
+// RENDERER
+// ════════════════════════════════════════════════════════════════
+const canvas   = document.getElementById('canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
+renderer.autoClear         = false;
+renderer.localClippingEnabled = true;
+
+// Reflection render target
+const reflRT = new THREE.WebGLRenderTarget(
+  Math.floor(window.innerWidth * 0.5),
+  Math.floor(window.innerHeight * 0.5),
+  { minFilter:THREE.LinearFilter, magFilter:THREE.LinearFilter }
+);
+// Post-process target (for chromatic aberration)
+const postRT = new THREE.WebGLRenderTarget(
+  window.innerWidth, window.innerHeight,
+  { minFilter:THREE.LinearFilter, magFilter:THREE.LinearFilter }
+);
+// Refraction render target — scene rendered before water, used for underwater distortion
+const refrRT = new THREE.WebGLRenderTarget(
+  Math.floor(window.innerWidth * 0.6),
+  Math.floor(window.innerHeight * 0.6),
+  { minFilter:THREE.LinearFilter, magFilter:THREE.LinearFilter }
+);
+
+// ════════════════════════════════════════════════════════════════
+// SCENES
+// ════════════════════════════════════════════════════════════════
+const scene       = new THREE.Scene();
+const waterScene  = new THREE.Scene();   // 只含水面 mesh，用于独立渲染
+const postScene   = new THREE.Scene();
+const postCam     = new THREE.OrthographicCamera(-1,1,1,-1,0,1);
+
+// Vertical fog colour (dark blue-grey)
+const FOG_COLOR = new THREE.Color(0x080e12);
+scene.background = new THREE.Color(0x080e12);
+// We implement height-based fog manually in shaders; use scene fog just for distance
+scene.fog = new THREE.FogExp2(0x0d1a20, 0.028);
+
+// ════════════════════════════════════════════════════════════════
+// CAMERA
+// ════════════════════════════════════════════════════════════════
+// 定义随机范围（例如在 -50 到 50 之间随机）
+const range = 100; 
+const startX = (Math.random() - 0.5) * range;
+const startZ = (Math.random() - 0.5) * range;
+
+const camera = new THREE.PerspectiveCamera(66, window.innerWidth/window.innerHeight, 0.05, 120);
+// 使用随机生成的坐标
+camera.position.set(startX, EYE_Y, startZ); 
+camera.lookAt(startX, EYE_Y, startZ - 1);
+
+// Mirror camera for reflection (flipped about water plane Y=WATER_Y)
+const reflCamera = new THREE.PerspectiveCamera(66, window.innerWidth/window.innerHeight, 0.05, 60);
+
+// ════════════════════════════════════════════════════════════════
+// LIGHTING
+// ════════════════════════════════════════════════════════════════
+scene.add(new THREE.AmbientLight(0xc8e0f0, 0.75));
+
+const sun = new THREE.DirectionalLight(0xffe8c8, 2.0);
+sun.position.set(10, 20, 5);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048,2048);
+sun.shadow.camera.left=-60; sun.shadow.camera.right=60;
+sun.shadow.camera.top=60;   sun.shadow.camera.bottom=-60;
+sun.shadow.camera.far=200;  sun.shadow.bias=-0.001;
+scene.add(sun);
+
+const fillLight = new THREE.DirectionalLight(0x8ab0d0, 0.25);
+fillLight.position.set(-5,5,-5);
+scene.add(fillLight);
+
+// ════════════════════════════════════════════════════════════════
+// SHARED GLSL SNIPPETS
+// ════════════════════════════════════════════════════════════════
+// World-space UV mapping so adjacent surfaces share seamless texture coords
+const GLSL_WORLD_UV = `
+  // Projects world position onto axis-aligned plane for seamless tiling
+  vec2 worldUV(vec3 wpos, vec3 wnorm, float scale) {
+    vec3 a = abs(wnorm);
+    vec2 uv;
+    if (a.y > a.x && a.y > a.z) uv = wpos.xz;       // floor/ceiling
+    else if (a.x > a.z)          uv = wpos.zy;       // X-facing wall
+    else                         uv = wpos.xy;       // Z-facing wall
+    return uv * scale;
+  }
+`;
+
+// Height fog — fades to black between FOG_START and FOG_FULL
+const GLSL_HEIGHT_FOG = `
+  vec4 applyHeightFog(vec4 col, vec3 wpos) {
+    float t = clamp((wpos.y - ${FOG_START.toFixed(2)}) / (${FOG_FULL.toFixed(2)} - ${FOG_START.toFixed(2)}), 0.0, 1.0);
+    float fog = t * t;
+    return mix(col, vec4(${FOG_COLOR.r.toFixed(3)}, ${FOG_COLOR.g.toFixed(3)}, ${FOG_COLOR.b.toFixed(3)}, 1.0), fog);
+  }
+`;
+
+// Caustics / water-light animation
+const GLSL_CAUSTICS = `
+  float caustics(vec2 p, float t) {
+    float c = 0.0;
+    c += sin(p.x*8.0  + t*1.8)*cos(p.y*7.0  + t*1.4) * 0.35;
+    c += sin(p.x*13.0 - t*2.1)*cos(p.y*11.0 + t*1.7) * 0.25;
+    c += sin((p.x+p.y)*9.0 + t*2.4) * 0.20;
+    c += sin(p.x*19.0 + t*3.0)*cos(p.y*17.0 - t*2.8) * 0.10;
+    c = clamp(c * 0.5 + 0.5, 0.0, 1.0);
+    return pow(c, 3.5);
+  }
+`;
+
+// Underwater UV distortion (simulates refraction through waves)
+// NOTE: This is now only used in the water surface shader for screen-space refraction.
+// Geometry materials no longer need UV distortion.
+const GLSL_UNDERWATER_DISTORT = `
+  vec2 underwaterDistort(vec2 uv, float t, float strength) {
+    float dx = sin(uv.x*6.0 + t*1.2)*cos(uv.y*5.0 + t*0.8);
+    float dy = cos(uv.x*7.0 - t*0.9)*sin(uv.y*6.5 + t*1.1);
+    dx += sin((uv.x+uv.y)*9.0 + t*1.7)*0.4;
+    dy += cos((uv.x-uv.y)*8.0 + t*1.5)*0.4;
+    return uv + vec2(dx,dy)*strength;
+  }
+`;
+
+// ════════════════════════════════════════════════════════════════
+// TILE TEXTURE (single shared canvas — world-UV handles alignment)
+// ════════════════════════════════════════════════════════════════
+function makeTileTex(opts) {
+  const { bg, line, tileSize=40, size=512 } = opts;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = bg;  ctx.fillRect(0,0,size,size);
+  ctx.strokeStyle = line; ctx.lineWidth = 2.2;
+  for (let i=0; i<=size; i+=tileSize) {
+    ctx.beginPath(); ctx.moveTo(i,0);    ctx.lineTo(i,size);    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0,i);    ctx.lineTo(size,i);    ctx.stroke();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  return t;
+}
+
+// Lighter khaki-oxidised wall/ceil tile — more visible, warm white
+const WALL_TEX  = makeTileTex({ bg:'#cec4ae', line:'#38291a', tileSize:22, size:512 });
+// Pool floor — light aqua-cream with sharp dark grid
+const FLOOR_TEX = makeTileTex({ bg:'#a8c8c0', line:'#162420', tileSize:22, size:512 });
+
+// ════════════════════════════════════════════════════════════════
+// CUSTOM SHADER MATERIAL FACTORIES
+// ════════════════════════════════════════════════════════════════
+
+// World-UV tile shader with caustics overlay + height fog
+// Underwater distortion is now handled screen-space by the water surface shader
+function makeTileMat({ tex, tileScale=1.0, isCeiling=false }) {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      uTex:        { value: tex },
+      uTileScale:  { value: tileScale },
+      uTime:       { value: 0 },
+      uCausticStr: { value: isCeiling ? 0.45 : 0.14 },
+    },
+    vertexShader:`
+      varying vec3 vWorldPos;
+      varying vec3 vWorldNormal;
+      void main() {
+        vec4 wp = modelMatrix * vec4(position,1.0);
+        vWorldPos    = wp.xyz;
+        vWorldNormal = normalize((modelMatrix * vec4(normal,0.0)).xyz);
+        gl_Position  = projectionMatrix * viewMatrix * wp;
+      }
+    `,
+    fragmentShader:`
+      uniform sampler2D uTex;
+      uniform float uTileScale;
+      uniform float uTime;
+      uniform float uCausticStr;
+      varying vec3 vWorldPos;
+      varying vec3 vWorldNormal;
+      ${GLSL_WORLD_UV}
+      ${GLSL_HEIGHT_FOG}
+      ${GLSL_CAUSTICS}
+
+      vec3 lambert(vec3 col) {
+        vec3 L = normalize(vec3(0.6,1.0,0.3));
+        float d = max(dot(vWorldNormal, L), 0.0);
+        vec3 amb = col * vec3(0.52, 0.60, 0.80) * 0.88;
+        vec3 lit = col * vec3(1.05, 0.95, 0.82) * d;
+        return amb + lit;
+      }
+
+      void main() {
+        vec2 uv = worldUV(vWorldPos, vWorldNormal, uTileScale);
+        vec4 col = texture2D(uTex, uv);
+        col.rgb = lambert(col.rgb);
+
+        // Caustics light overlay (animated)
+        float caust  = caustics(vWorldPos.xz * 0.38, uTime) * uCausticStr;
+        float caustR = caustics(vWorldPos.xz * 0.38 + vec2(0.009,0.004), uTime) * uCausticStr;
+        float caustB = caustics(vWorldPos.xz * 0.38 - vec2(0.007,0.010), uTime) * uCausticStr;
+        col.rgb += vec3(caustR*1.2, caust*0.85, caustB*1.15);
+
+        col = applyHeightFog(col, vWorldPos);
+        gl_FragColor = col;
+      }
+    `,
+    side: THREE.FrontSide,
+  });
+}
+
+const matCache = new Map();
+function getTileMat(key, opts) {
+  if (!matCache.has(key)) matCache.set(key, makeTileMat(opts));
+  return matCache.get(key);
+}
+
+const getWallMat  = () => getTileMat('wall',  { tex:WALL_TEX,  tileScale:0.20 });
+const getFloorMat = () => getTileMat('floor', { tex:FLOOR_TEX, tileScale:0.20 });
+const getCeilMat  = () => getTileMat('ceil',  { tex:WALL_TEX,  tileScale:0.20, isCeiling:true });
+
+// ════════════════════════════════════════════════════════════════
+// WATER SURFACE SHADER  (reflection + wave + depth fade)
+// ════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════
+// WATER SURFACE SHADER
+// Three layers: reflection (above) + screen-space refraction (below water) + base colour
+// refrRT = scene rendered WITHOUT water, used for underwater distortion
+// reflRT = scene rendered with mirror camera, used for surface reflection
+// ════════════════════════════════════════════════════════════════
+const waterMat = new THREE.ShaderMaterial({
+  uniforms: {
+    uReflTex:    { value: reflRT.texture },
+    uRefrTex:    { value: refrRT.texture },   // scene-behind-water for refraction
+    uTime:       { value: 0 },
+    uCamPos:     { value: new THREE.Vector3() },
+    uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+    uWaterY:     { value: WATER_Y },
+  },
+  vertexShader:`
+    varying vec3 vWorldPos;
+    varying vec3 vNormal;
+    varying vec4 vProjPos;
+    uniform float uTime;
+    void main() {
+      vec3 p = position;
+      // Multi-frequency wave displacement (Y only — stays near WATER_Y)
+      p.y += sin(p.x * 0.21 + uTime * 0.62) * 0.10
+           + cos(p.z * 0.37 + uTime * 0.85) * 0.09
+           + sin((p.x + p.z) * 0.73 + uTime * 1.6) * 0.04
+           + cos(p.x * 1.42 + uTime * 2.8) * 0.015;
+      vec4 wp = modelMatrix * vec4(p, 1.0);
+      vWorldPos = wp.xyz;
+      // Approximate wave normal
+      float eps = 0.1;
+      float hx = sin((p.x+eps)*0.21 + uTime*0.62)*0.10 + cos(p.z*0.37 + uTime*0.85)*0.09;
+      float hz = sin(p.x*0.21 + uTime*0.62)*0.10 + cos((p.z+eps)*0.37 + uTime*0.85)*0.09;
+      vNormal  = normalize(vec3(-(hx - p.y)/eps, 1.0, -(hz - p.y)/eps));
+      vProjPos = projectionMatrix * viewMatrix * wp;
+      gl_Position = vProjPos;
+    }
+  `,
+  fragmentShader:`
+    uniform sampler2D uReflTex;
+    uniform sampler2D uRefrTex;
+    uniform float uTime;
+    uniform vec3 uCamPos;
+    uniform vec2 uResolution;
+    uniform float uWaterY;
+    varying vec3 vWorldPos;
+    varying vec3 vNormal;
+    varying vec4 vProjPos;
+
+    void main() {
+      vec2 screenUV = (vProjPos.xy / vProjPos.w) * 0.5 + 0.5;
+
+      // Wave-based distortion offsets (world-space ripple)
+      float wx = vWorldPos.x, wz = vWorldPos.z;
+      float dx = sin(wx*5.2 + uTime*1.2)*cos(wz*4.1 + uTime*0.9)*0.022
+               + sin((wx+wz)*3.8 + uTime*1.7)*0.010;
+      float dz = cos(wx*6.1 - uTime*0.8)*sin(wz*5.5 + uTime*1.1)*0.022
+               + cos((wx-wz)*4.3 + uTime*1.5)*0.010;
+
+      // ── Reflection (above water, flipped UV) ─────────────────
+      vec2 reflUV = clamp(vec2(screenUV.x + dx, 1.0 - screenUV.y + dz), 0.001, 0.999);
+      vec4 reflCol = texture2D(uReflTex, reflUV);
+
+      // ── Refraction (below water, same UV side but distorted) ──
+      // This makes all underwater geometry (columns, walls, floor)
+      // appear warped as seen through a moving water surface
+      vec2 refrUV = clamp(vec2(screenUV.x + dx*0.6, screenUV.y + dz*0.6), 0.001, 0.999);
+      vec4 refrCol = texture2D(uRefrTex, refrUV);
+
+      // ── Fresnel ───────────────────────────────────────────────
+      vec3 V = normalize(uCamPos - vWorldPos);
+      float fresnel = pow(1.0 - max(dot(V, vNormal), 0.0), 3.2);
+      fresnel = clamp(fresnel * 0.88 + 0.04, 0.0, 1.0);
+
+      // ── Distance fades ────────────────────────────────────────
+      float dist = length(vWorldPos.xz - uCamPos.xz);
+      float reflFade = 1.0 - smoothstep(3.0, 18.0, dist);  // reflection only near camera
+      float refrFade = smoothstep(0.0, 22.0, dist);         // refraction tint deepens with distance
+
+      // ── Water base colour (shallow→deep) ─────────────────────
+      vec3 shallowCol = vec3(0.08, 0.32, 0.40);
+      vec3 deepCol    = vec3(0.01, 0.04, 0.18);   // 远处深蓝近黑
+      vec3 waterCol   = mix(shallowCol, deepCol, refrFade);
+
+      // ── Compose ───────────────────────────────────────────────
+      // Start from refracted underwater view, tint with water colour, add reflection on top
+      vec3 underwater = mix(refrCol.rgb, waterCol, 0.45);
+      vec3 surface    = mix(underwater, reflCol.rgb, fresnel * reflFade);
+
+      gl_FragColor = vec4(surface, 1.0);   // 完全不透明，彻底覆盖水线以下
+    }
+  `,
+  transparent: false,
+  side: THREE.DoubleSide,
+  depthWrite: true,
+});
+
+const WATER_SEGS = 100;
+const WATER_W    = CHUNK * (VIEW_DIST * 2 + 2);
+const waterGeo   = new THREE.PlaneGeometry(WATER_W, WATER_W, WATER_SEGS, WATER_SEGS);
+waterGeo.rotateX(-Math.PI/2);
+const waterMesh  = new THREE.Mesh(waterGeo, waterMat);
+waterMesh.position.y = WATER_Y;
+// 水面只放入 waterScene，不放入主场景
+// 这样 Pass1(refrRT) 拍到的是纯净无水的场景，Pass3 只渲染水面覆盖在上面
+waterScene.add(waterMesh);
+
+// Blit quad：把 refrRT 原样铺满屏幕作为 Pass3 的背景层
+const blitMat = new THREE.ShaderMaterial({
+  uniforms: { tBlit: { value: refrRT.texture } },
+  vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position,1.0); }`,
+  fragmentShader: `uniform sampler2D tBlit; varying vec2 vUv;
+    void main(){ gl_FragColor = texture2D(tBlit, vUv); }`,
+  depthTest: false, depthWrite: false,
+});
+const blitQuad = new THREE.Mesh(new THREE.PlaneGeometry(2,2), blitMat);
+// blitQuad 放入独立场景，渲染时先铺底，再渲染水面
+const blitScene = new THREE.Scene();
+blitScene.add(blitQuad);
+
+// ════════════════════════════════════════════════════════════════
+// CHROMATIC ABERRATION POST-PROCESS
+// ════════════════════════════════════════════════════════════════
+const chromaMat = new THREE.ShaderMaterial({
+  uniforms: {
+    tDiffuse: { value: postRT.texture },
+    uStrength:{ value: 0.0020 },
+    uTime:    { value: 0 },
+  },
+  vertexShader:`varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position,1.0); }`,
+  fragmentShader:`
+    uniform sampler2D tDiffuse;
+    uniform float uStrength;
+    uniform float uTime;
+    varying vec2 vUv;
+    void main() {
+      vec2 center = vUv - 0.5;
+      float edgeMask = length(center);
+      // Edge contrast detection (approximation)
+      vec2 ofs = normalize(center + 0.001) * uStrength * (0.5 + edgeMask);
+      float r = texture2D(tDiffuse, vUv + ofs * vec2( 1.0, 0.3)).r;
+      float g = texture2D(tDiffuse, vUv + ofs * vec2(-0.2,-0.4)).g;
+      float b = texture2D(tDiffuse, vUv + ofs * vec2(-0.5, 0.7)).b;
+      float a = texture2D(tDiffuse, vUv).a;
+      gl_FragColor = vec4(r, g, b, a);
+    }
+  `,
+  depthTest:false, depthWrite:false,
+});
+const chromaQuad = new THREE.Mesh(new THREE.PlaneGeometry(2,2), chromaMat);
+postScene.add(chromaQuad);
+
+// ════════════════════════════════════════════════════════════════
+// CHUNK / WORLD GENERATION
+// ════════════════════════════════════════════════════════════════
+const chunks = new Map();
+function chunkKey(cx,cz){ return `${cx},${cz}`; }
+
+function seededRng(cx,cz) {
+  let s = Math.sin(cx*127.1 + cz*311.7 + 5.3)*43758.5453;
+  return () => { s=Math.sin(s)*43758.5453; return s-Math.floor(s); };
+}
+
+// ── GEOMETRY BUILDERS ─────────────────────────────────────────
+
+function makeFloor(cx,cz,grp) {
+  const geo = new THREE.PlaneGeometry(CHUNK, CHUNK);
+  const m   = new THREE.Mesh(geo, getFloorMat());
+  m.rotation.x = -Math.PI/2;
+  m.position.set(cx*CHUNK, FLOOR_Y, cz*CHUNK);
+  m.receiveShadow = true; grp.add(m);
+}
+
+function makeCeiling(cx,cz,grp) {
+  // ~60% of chunks have ceiling
+  const has = Math.abs(Math.sin(cx*61.3+cz*97.7)) > 0.40;
+  if (!has) return;
+  const geo = new THREE.BoxGeometry(CHUNK, CEIL_THICK, CHUNK);
+  const m   = new THREE.Mesh(geo, getCeilMat());
+  m.position.set(cx*CHUNK, CEIL_Y, cz*CHUNK);
+  m.receiveShadow = true; grp.add(m);
+}
+
+// Wall panel using world-UV material
+function wallPanel(wx, wy, wz, sizeX, sizeZ, grp, rotY=0) {
+  const geo = new THREE.BoxGeometry(sizeX, BUILD_H, sizeZ);
+  const m   = new THREE.Mesh(geo, getWallMat());
+  m.position.set(wx, wy + BUILD_H/2, wz);
+  m.rotation.y = rotY;
+  m.castShadow = m.receiveShadow = true;
+  grp.add(m);
+  return m;
+}
+
+// Column with world-UV tile — radius scaled up for chunkier look
+function makeCol(wx,wy,wz,r,grp) {
+  const R = r * 1.8;                                      // 1.8× 加粗
+  const geo  = new THREE.CylinderGeometry(R, R+0.06, BUILD_H, 14);
+  const m    = new THREE.Mesh(geo, getWallMat());
+  m.position.set(wx, wy+BUILD_H/2, wz);
+  m.castShadow = true; grp.add(m);
+  // Capital — proportionally wider
+  const capG = new THREE.CylinderGeometry(R+0.32, R+0.06, 0.28, 14);
+  const cap  = new THREE.Mesh(capG, getWallMat());
+  cap.position.set(wx, wy+BUILD_H-0.14, wz);
+  grp.add(cap);
+  // Base disc
+  const baseG = new THREE.CylinderGeometry(R+0.28, R+0.28, 0.18, 14);
+  const base  = new THREE.Mesh(baseG, getWallMat());
+  base.position.set(wx, wy+0.09, wz);
+  grp.add(base);
+}
+
+// ── ARCH CORRIDOR ─────────────────────────────────────────────
+function makeArchCorridor(cx,cz,grp) {
+  const hw = CHUNK*0.38;  // half-width of corridor
+  const tk = 0.32;
+  const archH = BUILD_H*0.68;
+  const archR = hw*0.92;
+
+  // Side walls (full height)
+  wallPanel(cx*CHUNK, FLOOR_Y, cz*CHUNK - hw, CHUNK, tk, grp);
+  wallPanel(cx*CHUNK, FLOOR_Y, cz*CHUNK + hw, CHUNK, tk, grp);
+
+  // Arch torus
+  const arcGeo = new THREE.TorusGeometry(archR, tk*0.48, 8, 32, Math.PI);
+  const arc    = new THREE.Mesh(arcGeo, getWallMat());
+  arc.rotation.x = Math.PI/2;
+  arc.position.set(cx*CHUNK, FLOOR_Y+archH, cz*CHUNK);
+  arc.castShadow = true; grp.add(arc);
+
+  // Arch pillars
+  [-hw+0.16, hw-0.16].forEach(zo => makeCol(cx*CHUNK, FLOOR_Y, cz*CHUNK+zo, 0.18, grp));
+
+  // Lunette panel above arch
+  wallPanel(cx*CHUNK, FLOOR_Y+archH, cz*CHUNK, CHUNK, tk, grp);
+}
+
+// ── ROOM WITH DOOR ─────────────────────────────────────────────
+function makeRoomDoor(cx,cz,grp) {
+  const rm = CHUNK*0.86, tk=0.30, dW=1.8, dH=BUILD_H*0.50;
+  const x0=cx*CHUNK, z0=cz*CHUNK;
+
+  [
+    { ox:0,      oz:-rm/2, sX:rm, sZ:tk, hasDoor:true  },
+    { ox:0,      oz: rm/2, sX:rm, sZ:tk, hasDoor:false },
+    { ox:-rm/2,  oz:0,     sX:tk, sZ:rm, hasDoor:false },
+    { ox: rm/2,  oz:0,     sX:tk, sZ:rm, hasDoor:false },
+  ].forEach(({ ox,oz,sX,sZ,hasDoor }) => {
+    if (!hasDoor) {
+      wallPanel(x0+ox, FLOOR_Y, z0+oz, sX, sZ, grp);
+      return;
+    }
+    // Exact side widths so panels sit flush against doorway edges
+    const side = (sX - dW) / 2;
+    // Left panel: rightmost edge at x0 - dW/2
+    wallPanel(x0 - dW/2 - side/2, FLOOR_Y, z0+oz, side, sZ, grp);
+    // Right panel: leftmost edge at x0 + dW/2
+    wallPanel(x0 + dW/2 + side/2, FLOOR_Y, z0+oz, side, sZ, grp);
+    // Lintel sits exactly on top of door height
+    const linH = BUILD_H - dH;
+    const linG = new THREE.BoxGeometry(dW, linH, sZ);
+    const lin  = new THREE.Mesh(linG, getWallMat());
+    lin.position.set(x0, FLOOR_Y + dH + linH/2, z0+oz);
+    lin.castShadow = lin.receiveShadow = true; grp.add(lin);
+    // Dark void — exactly same size and position as the opening, no extra offset
+    const vG = new THREE.BoxGeometry(dW, dH, sZ * 0.5);
+    const v  = new THREE.Mesh(vG, new THREE.MeshLambertMaterial({color:0x040808}));
+    v.position.set(x0, FLOOR_Y + dH/2, z0+oz);
+    grp.add(v);
+  });
+}
+
+// ── SPIRAL STAIR ──────────────────────────────────────────────
+function makeSpiral(cx,cz,grp) {
+  const sH=0.22, cnt=Math.floor(BUILD_H/sH);
+  const iR=0.32, sL=1.6, sW=0.65;
+  const midR=iR+sL/2, x0=cx*CHUNK, z0=cz*CHUNK;
+  makeCol(x0, FLOOR_Y, z0, iR, grp);
+  for(let i=0;i<cnt;i++){
+    const ang=(i/cnt)*Math.PI*4;
+    const geo=new THREE.BoxGeometry(sL, sH, sW);
+    const m=new THREE.Mesh(geo, getWallMat());
+    m.position.set(x0+Math.cos(ang)*midR, FLOOR_Y+i*sH+sH/2, z0+Math.sin(ang)*midR);
+    m.rotation.y=-ang;
+    m.castShadow=m.receiveShadow=true; grp.add(m);
+  }
+}
+
+// ── STRAIGHT STAIR ────────────────────────────────────────────
+function makeStraight(cx,cz,grp) {
+  const sH=0.20, sW=3.4, sD=0.48, cnt=Math.floor(BUILD_H/sH);
+  const dir=Math.floor(Math.abs(Math.sin(cx*41.3+cz*67.7))*4);
+  const ox=[sD,0,-sD,0][dir], oz=[0,sD,0,-sD][dir];
+  for(let i=0;i<cnt;i++){
+    const geo=dir%2===0 ? new THREE.BoxGeometry(sD,sH,sW) : new THREE.BoxGeometry(sW,sH,sD);
+    const m=new THREE.Mesh(geo, getWallMat());
+    m.position.set(cx*CHUNK+i*ox, FLOOR_Y+i*sH+sH/2, cz*CHUNK+i*oz);
+    m.castShadow=m.receiveShadow=true; grp.add(m);
+  }
+}
+
+// ── COLUMN ROW (成排柱子, 数十根) ──────────────────────────────
+function makeColumnRow(cx,cz,grp) {
+  const rng = seededRng(cx+100, cz+100);
+  const count  = 8 + Math.floor(rng()*12);     // 8~19 根
+  const dir    = Math.floor(rng()*2);            // 0=沿X, 1=沿Z
+  const spacing= 1.4 + rng()*0.8;
+  const r      = 0.18 + rng()*0.14;
+  const startOffset = -(count/2)*spacing;
+  for(let i=0;i<count;i++){
+    const off = startOffset + i*spacing;
+    const wx  = dir===0 ? cx*CHUNK+off : cx*CHUNK;
+    const wz  = dir===0 ? cz*CHUNK     : cz*CHUNK+off;
+    makeCol(wx, FLOOR_Y, wz, r, grp);
+  }
+}
+
+// ── COLUMN CLUSTER ────────────────────────────────────────────
+function makeColumnCluster(cx,cz,grp) {
+  const rng = seededRng(cx, cz+50);
+  const offsets=[[-1.6,0],[1.6,0],[0,-1.6],[0,1.6],[0,0]];
+  const cnt = 2+Math.floor(rng()*4);
+  offsets.slice(0,cnt).forEach(([ox,oz])=>makeCol(cx*CHUNK+ox, FLOOR_Y, cz*CHUNK+oz, 0.24+rng()*0.10, grp));
+}
+
+// ── THICK COLUMN (粗柱子) ─────────────────────────────────────
+function makeThickColumn(cx,cz,grp) {
+  const rng = seededRng(cx+200, cz+200);
+  // One massive square column in the centre
+  const size = 1.2 + rng()*0.8;
+  const geo  = new THREE.BoxGeometry(size, BUILD_H, size);
+  const m    = new THREE.Mesh(geo, getWallMat());
+  m.position.set(cx*CHUNK, FLOOR_Y + BUILD_H/2, cz*CHUNK);
+  m.castShadow = m.receiveShadow = true; grp.add(m);
+  // Chamfer cap
+  const capG = new THREE.BoxGeometry(size+0.3, 0.25, size+0.3);
+  const cap  = new THREE.Mesh(capG, getWallMat());
+  cap.position.set(cx*CHUNK, FLOOR_Y+BUILD_H-0.12, cz*CHUNK);
+  grp.add(cap);
+  // Base plate
+  const baseG = new THREE.BoxGeometry(size+0.4, 0.2, size+0.4);
+  const base  = new THREE.Mesh(baseG, getWallMat());
+  base.position.set(cx*CHUNK, FLOOR_Y+0.10, cz*CHUNK);
+  grp.add(base);
+}
+
+// ── FLOOR HOLE (重构后的洞穴：5m深，3m开始变黑) ──────────────────
+function makeFloorHole(cx, cz, grp) {
+  const radius    = 2.5;
+  const depth     = 10.0;
+  const fadeStart = 0.0;    // 从0.0m开始变黑
+  // fade公式: (depth - fadeStart) 映射到 [0,1]
+  const fadeEnd   = 10.0;    // 10m时完全变黑
+  const segs      = 48;
+  const x0 = cx * CHUNK, z0 = cz * CHUNK;
+
+  // ── 带孔地板 ─────────────────────────────────────────────────
+  const shape = new THREE.Shape();
+  const half  = CHUNK / 2;
+  shape.moveTo(-half, -half); shape.lineTo( half, -half);
+  shape.lineTo( half,  half); shape.lineTo(-half,  half);
+  shape.lineTo(-half, -half);
+  const holePath = new THREE.Path();
+  holePath.absarc(0, 0, radius, 0, Math.PI * 2, true);
+  shape.holes.push(holePath);
+  const floorGeo  = new THREE.ShapeGeometry(shape);
+  const floorMesh = new THREE.Mesh(floorGeo, getFloorMat());
+  floorMesh.rotation.x = -Math.PI / 2;
+  floorMesh.position.set(x0, FLOOR_Y, z0);
+  floorMesh.receiveShadow = true;
+  grp.add(floorMesh);
+
+  // ── 洞壁：与其他建筑同色，从fadeStart开始渐变到背景色 ────────
+  const botCol = new THREE.Color(0x080e12);  // 背景深蓝黑
+
+  // 瓷砖尺寸（与其他材质对齐，tileScale=0.20 → 1/0.20=5单位/纹理）
+  const TILE_WORLD = 1.0 / 0.20;   // 5m = 一张纹理的世界尺寸
+  // 圆柱内侧展开周长
+  const circumference = 2 * Math.PI * radius;  // ≈15.71m
+  // 水平repeat: 周长 / 纹理世界尺寸
+  const repU = circumference / TILE_WORLD;      // ≈3.14
+
+  // 段高：用固定0.5m方便计算，总段数向上取整
+  const hPerSeg  = 0.5;
+  const wallSegs = Math.ceil(depth / hPerSeg);
+  // 垂直repeat per段: segH / 纹理世界尺寸
+  const repV = hPerSeg / TILE_WORLD;            // = 0.1
+
+  for (let i = 0; i < wallSegs; i++) {
+    const currentDepth = i * hPerSeg;
+    const actualH = Math.min(hPerSeg, depth - currentDepth); // 最后一段可能不足
+
+    // fade: 0=顶部原色, 1=底部背景色
+    let fade = 0;
+    if (currentDepth > fadeStart) {
+      fade = (currentDepth - fadeStart) / (fadeEnd - fadeStart);
+    }
+    fade = Math.pow(Math.min(fade, 1.0), 1.2);
+
+    // 顶部不加tint（color=白色让贴图原色显示），越深越混入背景色
+    const tintCol = new THREE.Color(0xffffff).lerp(botCol, fade);
+
+    const wGeo = new THREE.CylinderGeometry(radius, radius, actualH, segs, 1, true);
+    const wTex = WALL_TEX.clone();
+    wTex.wrapS = wTex.wrapT = THREE.RepeatWrapping;
+    // U = 水平绕一圈, V = 该段高度占纹理比例（保持瓷砖正方形）
+    wTex.repeat.set(repU, repV * (actualH / hPerSeg));
+    wTex.needsUpdate = true;
+
+    const wMat = new THREE.MeshLambertMaterial({
+      map:  wTex,
+      color: tintCol,
+      side: THREE.BackSide,
+    });
+
+    const wMesh = new THREE.Mesh(wGeo, wMat);
+    wMesh.position.set(x0, FLOOR_Y - currentDepth - actualH / 2, z0);
+    grp.add(wMesh);
+  }
+  // 无底面 —— 背景色自然呈现深渊
+}
+
+// ─── STRUCTURE LIST ───────────────────────────────────────────
+const STRUCTS = [
+  makeArchCorridor, makeRoomDoor, makeSpiral, makeStraight,
+  makeColumnRow, makeColumnCluster,
+  makeThickColumn, makeFloorHole, 
+];
+
+function generateChunk(cx,cz) {
+  const key = chunkKey(cx,cz);
+  if (chunks.has(key)) return;
+  const grp = new THREE.Group();
+  const rng = seededRng(cx,cz);
+
+  // Pick exactly one structure per chunk — no overlap
+  let structFn = null;
+  if (rng() < STRUCT_PROB) {
+    structFn = STRUCTS[Math.floor(rng()*STRUCTS.length)];
+  }
+
+  // makeFloorHole now generates its own complete floor internally, skip makeFloor for it
+  if (structFn !== makeFloorHole) {
+    makeFloor(cx,cz,grp);
+  }
+  makeCeiling(cx,cz,grp);
+  if (structFn) structFn(cx,cz,grp);
+
+  scene.add(grp);
+  chunks.set(key, { grp, cx, cz });
+}
+
+function updateChunks(camX,camZ) {
+  const ccx=Math.round(camX/CHUNK), ccz=Math.round(camZ/CHUNK);
+  for(let dx=-VIEW_DIST;dx<=VIEW_DIST;dx++)
+    for(let dz=-VIEW_DIST;dz<=VIEW_DIST;dz++)
+      generateChunk(ccx+dx, ccz+dz);
+  const KILL=VIEW_DIST+2;
+  for(const [key,ck] of chunks){
+    if(Math.abs(ck.cx-ccx)>KILL||Math.abs(ck.cz-ccz)>KILL){
+      scene.remove(ck.grp);
+      ck.grp.traverse(c=>{
+        if(c.geometry) c.geometry.dispose();
+        if(c.material)(Array.isArray(c.material)?c.material:[c.material]).forEach(m=>m.dispose());
+      });
+      chunks.delete(key);
+    }
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+// DROPPED OBJECTS
+// ════════════════════════════════════════════════════════════════
+const droppedObjs=[];
+let rippleActive=false, rippleTimer=0, ripplePos={x:0,z:0};
+
+function dropObject(type,text) {
+  const fd=new THREE.Vector3(0,0,-1).applyEuler(new THREE.Euler(0,lookYaw,0));
+  const dx=camera.position.x+fd.x*3, dz=camera.position.z+fd.z*3;
+  let obj;
+if(type === 'ball') {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+    const colors = ['#e63946', '#ffffff', '#457b9d', '#ffffff', '#f4a261', '#ffffff']; 
+    const w = canvas.width / 6;
+    for(let i = 0; i < 6; i++) {
+      ctx.fillStyle = colors[i];
+      ctx.fillRect(i * w, 0, w, canvas.height);
+    }
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, 12);              
+    ctx.fillRect(0, canvas.height - 12, canvas.width, 12); 
+    const texture = new THREE.CanvasTexture(canvas);
+    const ballGeo = new THREE.SphereGeometry(0.35, 64, 32); 
+    const ballMat = new THREE.MeshLambertMaterial({
+      map: texture
+    });
+
+    obj = new THREE.Mesh(ballGeo, ballMat);
+    obj.rotation.set(Math.PI / 4, 0, Math.PI / 6);
+    obj.userData.type = 'beachball';
+    obj.castShadow = true; 
+  }
+    else if(type === 'flower') {
+    const g = new THREE.Group();
+    const count = 60 + Math.floor(Math.random() * 20); 
+    const range = 1.4; 
+    const petalColors = [0xfff5f7, 0xffd1dc, 0xffb7c5, 0xffc0cb, 0xffe4e1, 0xff88aa, 0xff6699];
+
+    for(let i = 0; i < count; i++) {
+      const pG = new THREE.PlaneGeometry(0.05, 0.07, 2, 2); 
+      const pos = pG.attributes.position;
+      for (let j = 0; j < pos.count; j++) {
+        let x = pos.getX(j), y = pos.getY(j);
+        if (y > 0.03 && Math.abs(x) < 0.01) y -= 0.015; 
+        if (y < -0.02) x *= 0.2;
+        pos.setXY(j, x, y);
+      }
+      
+      const px = (Math.random() - 0.5) * range;
+      const pz = (Math.random() - 0.5) * range;
+
+      const randomColor = petalColors[Math.floor(Math.random() * petalColors.length)];
+      
+      const pMat = new THREE.MeshLambertMaterial({ 
+        color: randomColor, 
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.9
+      });
+      
+      const p = new THREE.Mesh(pG, pMat);
+      p.position.set(px, 0, pz);
+      p.rotation.set(Math.PI / 2, 0, Math.random() * Math.PI * 2);
+      
+      p.userData.rotSpeed = (Math.random() - 0.5) * 2;
+      p.userData.phase = Math.random() * Math.PI * 2;
+      
+      g.add(p);
+    }
+    
+    obj = g;
+    obj.userData.type = 'petals';
+    obj.userData.floatY = WATER_Y + 0.01;
+  }
+    else if(type==='text'){
+    const cv=document.createElement('canvas'); cv.width=512; cv.height=128;
+    const ctx=cv.getContext('2d');
+    ctx.font='bold 46px Helvetica,Arial,sans-serif';
+    ctx.fillStyle='white'; ctx.shadowColor='rgba(255,255,255,0.8)'; ctx.shadowBlur=10;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(text||'...', 256, 64);
+    obj=new THREE.Mesh(new THREE.PlaneGeometry(3,0.75),
+      new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(cv),transparent:true,side:THREE.DoubleSide,depthWrite:false}));
+    obj.userData.isBillboard=true;
+  }
+  if(!obj) return;
+  obj.position.set(dx, EYE_Y+2, dz);
+  obj.userData.velY=0.05; obj.userData.dropping=true;
+  obj.userData.floatY=WATER_Y+(type==='text'?0.45:0.12);
+  scene.add(obj); droppedObjs.push(obj);
+  setTimeout(()=>{ rippleActive=true; rippleTimer=0; ripplePos={x:dx-camera.position.x,z:dz-camera.position.z}; },700);
+}
+
+function updateDropped(dt) {
+  droppedObjs.forEach(o=>{
+    if(o.userData.dropping){
+      o.userData.velY=Math.min(o.userData.velY+0.003,0.15);
+      o.position.y-=o.userData.velY;
+      if(o.position.y<=o.userData.floatY){o.position.y=o.userData.floatY;o.userData.dropping=false;}
+    }
+    if(o.userData.isBillboard) o.rotation.y=lookYaw;
+    if(!o.userData.dropping) o.position.y=o.userData.floatY+Math.sin(gTime*0.8+o.position.x)*0.04;
+  });
+}
+
+// ════════════════════════════════════════════════════════════════
+// LOOK (mouse / touch drag — free look)
+// ════════════════════════════════════════════════════════════════
+let lookYaw   = 0;
+let lookPitch = 0;
+const PITCH_LIMIT = Math.PI * 0.38;
+const LOOK_SENS   = 0.004;
+
+let isDragging = false, lastMX = 0, lastMY = 0;
+
+function applyLook() {
+  // 平滑陀螺仪输入
+  smoothGyroYaw   += (gyroYaw   - smoothGyroYaw)   * (1 - GYRO_SMOOTH);
+  smoothGyroPitch += (gyroPitch - smoothGyroPitch) * (1 - GYRO_SMOOTH);
+
+  // 最终视角 = 陀螺仪基础（沉浸模式开时）+ 触摸/鼠标拖拽叠加
+  const finalYaw   = immersiveOn ? smoothGyroYaw   + lookYaw   : lookYaw;
+  const finalPitch = immersiveOn ? smoothGyroPitch + lookPitch : lookPitch;
+
+  camera.rotation.order = 'YXZ';
+  camera.rotation.y = finalYaw;
+  camera.rotation.x = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, finalPitch));
+  camera.rotation.z = 0;
+}
+
+canvas.addEventListener('mousedown', e => {
+  if (e.target !== canvas) return;
+  isDragging = true; lastMX = e.clientX; lastMY = e.clientY;
+});
+window.addEventListener('mousemove', e => {
+  if (!isDragging) return;
+  lookYaw   += (e.clientX - lastMX) * LOOK_SENS;   // drag right → yaw decreases → look right in Three.js
+  lookPitch += (e.clientY - lastMY) * LOOK_SENS;   // drag down  → pitch decreases → look down
+  lookPitch  = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, lookPitch));
+  lastMX = e.clientX; lastMY = e.clientY;
+});
+window.addEventListener('mouseup', () => { isDragging = false; });
+
+let touchLookId = null, lastTX = 0, lastTY = 0;
+canvas.addEventListener('touchstart', e => {
+  for (const t of e.changedTouches) {
+    if (touchLookId === null) { touchLookId = t.identifier; lastTX = t.clientX; lastTY = t.clientY; }
+  }
+}, { passive: true });
+canvas.addEventListener('touchmove', e => {
+  for (const t of e.changedTouches) {
+    if (t.identifier === touchLookId) {
+      // 触摸拖拽叠加在陀螺仪基础上（与鼠标方向一致）
+      lookYaw   += (t.clientX - lastTX) * LOOK_SENS;
+      lookPitch += (t.clientY - lastTY) * LOOK_SENS;
+      lookPitch  = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, lookPitch));
+      lastTX = t.clientX; lastTY = t.clientY;
+    }
+  }
+}, { passive: true });
+canvas.addEventListener('touchend', e => {
+  for (const t of e.changedTouches) if (t.identifier === touchLookId) touchLookId = null;
+}, { passive: true });
+
+// ════════════════════════════════════════════════════════════════
+// IMMERSIVE MODE — DeviceOrientation gyroscope
+// 手机旋转直接驱动视角，触摸拖拽叠加在陀螺仪基础上
+// ════════════════════════════════════════════════════════════════
+let immersiveOn   = true;   // 默认开启
+let gyroBaseAlpha = null;   // 初始化时记录基准偏航角
+let gyroBaseBeta  = null;   // 初始化时记录基准俯仰角
+let gyroYaw       = 0;      // 陀螺仪提供的偏航增量
+let gyroPitch     = 0;      // 陀螺仪提供的俯仰增量
+
+// 低通滤波平滑系数（0=不平滑, 1=完全不跟随）
+const GYRO_SMOOTH = 0.12;
+let smoothGyroYaw = 0, smoothGyroPitch = 0;
+
+function handleDeviceOrientation(e) {
+  if (!immersiveOn) return;
+  // alpha = 偏航 (0-360, 手机绕垂直轴旋转)
+  // beta  = 俯仰 (-180~180, 手机前后倾斜)
+  // gamma = 滚转 (-90~90, 手机左右倾斜)
+  const alpha = e.alpha || 0;
+  const beta  = e.beta  || 0;
+
+  // 第一次收到数据时记录基准
+  if (gyroBaseAlpha === null) { gyroBaseAlpha = alpha; gyroBaseBeta = beta; }
+
+  // 计算相对于基准的偏转量（处理360°环绕）
+  let dAlpha = alpha - gyroBaseAlpha;
+  if (dAlpha >  180) dAlpha -= 360;
+  if (dAlpha < -180) dAlpha += 360;
+  const dBeta = beta - gyroBaseBeta;
+
+  // 转换为弧度，alpha决定偏航，beta决定俯仰
+  gyroYaw   = (-dAlpha * Math.PI / 180) * 1.0;
+  gyroPitch = ( dBeta  * Math.PI / 180) * 0.8;
+  gyroPitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, gyroPitch));
+}
+
+window.addEventListener('deviceorientation', handleDeviceOrientation, true);
+
+// 重置基准（切换沉浸模式或重新校准）
+function resetGyroBase() {
+  gyroBaseAlpha = null;
+  gyroBaseBeta  = null;
+}
+
+// 沉浸开关按钮
+const btnImmersive = document.getElementById('btn-immersive');
+btnImmersive.addEventListener('click', async () => {
+  // iOS 13+ 需要用户手势请求权限
+  if (typeof DeviceOrientationEvent !== 'undefined' &&
+      typeof DeviceOrientationEvent.requestPermission === 'function') {
+    try {
+      const perm = await DeviceOrientationEvent.requestPermission();
+      if (perm !== 'granted') { alert('需要运动传感器权限才能使用沉浸模式'); return; }
+    } catch(err) { console.warn('DeviceOrientation permission error', err); }
+  }
+  immersiveOn = !immersiveOn;
+  if (immersiveOn) {
+    resetGyroBase();
+    btnImmersive.className = 'on';
+    btnImmersive.textContent = '🔄 沉浸';
+  } else {
+    btnImmersive.className = 'off';
+    btnImmersive.textContent = '👁 普通';
+  }
+});
+
+
+const WALK_SPEED = 3.5;   // m/s
+const moveKeys = { forward: false, backward: false, left: false, right: false };
+
+function updateMovement(dt) {
+  applyLook();   // apply rotation first so getWorldDirection is up to date
+
+  const fwd   = new THREE.Vector3();
+  camera.getWorldDirection(fwd);
+  fwd.y = 0; fwd.normalize();            // horizontal forward
+
+  const right = new THREE.Vector3();
+  right.crossVectors(fwd, new THREE.Vector3(0,1,0)).normalize(); // right = fwd × up
+
+  const spd = WALK_SPEED * dt;
+  if (moveKeys.forward)  camera.position.addScaledVector(fwd,    spd);
+  if (moveKeys.backward) camera.position.addScaledVector(fwd,   -spd);
+  if (moveKeys.right)    camera.position.addScaledVector(right,  spd);
+  if (moveKeys.left)     camera.position.addScaledVector(right, -spd);
+
+  camera.position.y = EYE_Y;
+}
+
+// ════════════════════════════════════════════════════════════════
+// INPUT
+// ════════════════════════════════════════════════════════════════
+const keys = {};
+document.addEventListener('keydown', e => {
+  const k = e.key.toLowerCase(); if (keys[k]) return; keys[k] = true;
+  if (['w','arrowup'].includes(k))    moveKeys.forward  = true;
+  if (['s','arrowdown'].includes(k))  moveKeys.backward = true;
+  if (['a','arrowleft'].includes(k))  moveKeys.left     = true;
+  if (['d','arrowright'].includes(k)) moveKeys.right    = true;
+});
+document.addEventListener('keyup', e => {
+  const k = e.key.toLowerCase(); keys[k] = false;
+  if (['w','arrowup'].includes(k))    moveKeys.forward  = false;
+  if (['s','arrowdown'].includes(k))  moveKeys.backward = false;
+  if (['a','arrowleft'].includes(k))  moveKeys.left     = false;
+  if (['d','arrowright'].includes(k)) moveKeys.right    = false;
+});
+
+document.querySelectorAll('.jbtn').forEach(btn => {
+  const dir = btn.dataset.dir;
+  if (!dir) return;
+  const press   = () => { btn.classList.add('pressed');    if (moveKeys[dir] !== undefined) moveKeys[dir] = true; };
+  const release = () => { btn.classList.remove('pressed'); if (moveKeys[dir] !== undefined) moveKeys[dir] = false; };
+  btn.addEventListener('mousedown', press);
+  btn.addEventListener('touchstart', e => { e.stopPropagation(); e.preventDefault(); press(); }, { passive: false });
+  ['mouseup','mouseleave'].forEach(ev => btn.addEventListener(ev, release));
+  btn.addEventListener('touchend', e => { e.stopPropagation(); release(); }, { passive: false });
+});
+
+// ════════════════════════════════════════════════════════════════
+// MODAL
+// ════════════════════════════════════════════════════════════════
+let selectedType=null;
+const modal    =document.getElementById('modal-overlay');
+const textWrap =document.getElementById('text-input-wrap');
+const textInput=document.getElementById('text-input');
+document.getElementById('btn-add').addEventListener('click',()=>{ modal.classList.add('active'); selectedType=null; textWrap.classList.remove('active'); });
+document.querySelectorAll('.modal-opt').forEach(opt=>opt.addEventListener('click',()=>{
+  document.querySelectorAll('.modal-opt').forEach(o=>o.classList.remove('selected'));
+  opt.classList.add('selected'); selectedType=opt.dataset.type;
+  textWrap.classList.toggle('active',selectedType==='text');
+  if(selectedType==='text') textInput.focus();
+}));
+document.getElementById('btn-cancel').addEventListener('click',()=>modal.classList.remove('active'));
+document.getElementById('btn-drop').addEventListener('click',()=>{
+  if(!selectedType) return;
+  dropObject(selectedType, selectedType==='text'?textInput.value:'');
+  modal.classList.remove('active'); textInput.value=''; selectedType=null;
+});
+modal.addEventListener('click',e=>{ if(e.target===modal) modal.classList.remove('active'); });
+
+// ════════════════════════════════════════════════════════════════
+// AUDIO
+// ════════════════════════════════════════════════════════════════
+const bgAudio=new Audio('music/core.mp3'); bgAudio.loop=true; bgAudio.volume=0.45;
+let audioStarted=false;
+const startAudio=()=>{ if(!audioStarted){ bgAudio.play().catch(()=>{}); audioStarted=true; } };
+['click','keydown','touchstart'].forEach(ev=>document.addEventListener(ev,startAudio,{once:true}));
+
+// ════════════════════════════════════════════════════════════════
+// RESIZE
+// ════════════════════════════════════════════════════════════════
+window.addEventListener('resize',()=>{
+  const w=window.innerWidth, h=window.innerHeight;
+  camera.aspect=w/h; camera.updateProjectionMatrix();
+  reflCamera.aspect=w/h; reflCamera.updateProjectionMatrix();
+  renderer.setSize(w,h);
+  reflRT.setSize(Math.floor(w*0.5), Math.floor(h*0.5));
+  refrRT.setSize(Math.floor(w*0.6), Math.floor(h*0.6));
+  postRT.setSize(w,h);
+  chromaMat.uniforms.tDiffuse.value=postRT.texture;
+  waterMat.uniforms.uResolution.value.set(w,h);
+});
+
+// ════════════════════════════════════════════════════════════════
+// MAIN LOOP
+// ════════════════════════════════════════════════════════════════
+let gTime=0, lastTime=0;
+
+function updateUniforms(t) {
+  // Update time on all cached tile materials
+  matCache.forEach(m => { if(m.uniforms&&m.uniforms.uTime) m.uniforms.uTime.value=t; });
+  waterMat.uniforms.uTime.value=t;
+  waterMat.uniforms.uCamPos.value.copy(camera.position);
+  chromaMat.uniforms.uTime.value=t;
+}
+
+// Position mirror camera (reflected about water plane)
+function positionReflCamera() {
+  reflCamera.position.set(
+    camera.position.x,
+    2 * WATER_Y - camera.position.y,
+    camera.position.z
+  );
+  reflCamera.rotation.order = 'YXZ';
+  reflCamera.rotation.y =  lookYaw;
+  reflCamera.rotation.x = -lookPitch;
+  reflCamera.rotation.z =  0;
+  reflCamera.fov = camera.fov;
+  reflCamera.updateProjectionMatrix();
+}
+
+function loop(ts) {
+  requestAnimationFrame(loop);
+  const dt=Math.min((ts-lastTime)/1000,0.05);
+  lastTime=ts; gTime+=dt;
+  if(rippleActive){ rippleTimer+=dt; if(rippleTimer>4) rippleActive=false; }
+
+  updateMovement(dt);
+  updateDropped(dt);
+  updateChunks(camera.position.x, camera.position.z);
+  updateUniforms(gTime);
+
+  // Keep water plane centred on camera
+  waterMesh.position.x=camera.position.x;
+  waterMesh.position.z=camera.position.z;
+
+  renderer.autoClear = false;
+
+  // ── Pass 1: 主场景（无水面）→ refrRT ─────────────────────────
+  // 拍下水下所有建筑，供水面折射采样
+  renderer.setRenderTarget(refrRT);
+  renderer.clear();
+  renderer.render(scene, camera);
+
+  // ── Pass 2: 镜像场景 → reflRT ────────────────────────────────
+  positionReflCamera();
+  renderer.setRenderTarget(reflRT);
+  renderer.clear();
+  renderer.render(scene, reflCamera);
+
+  // ── Pass 3: 水面以上的场景 → postRT ──────────────────────────
+  // 用裁剪平面只渲染 y > WATER_Y 的部分（天花板/高处墙壁等）
+  // 水面以下区域留给 Pass 4 的水面 shader 用 refrRT 填充
+  renderer.clippingPlanes = [ new THREE.Plane(new THREE.Vector3(0, 1, 0), -WATER_Y) ];
+  renderer.setRenderTarget(postRT);
+  renderer.clear();
+  renderer.render(scene, camera);
+  renderer.clippingPlanes = [];   // 恢复，不影响后续渲染
+
+  // ── Pass 4: 水面 → postRT（叠加在上一层）────────────────────
+  // 不清深度——水面受 Pass3 写入的深度约束，被墙壁正确遮挡
+  // 水面以下区域 depth=1.0（clip plane 裁掉了所有水下几何），水面正常写入
+  renderer.render(waterScene, camera);
+
+  // ── Pass 5: 色散后处理 → 屏幕 ────────────────────────────────
+  renderer.setRenderTarget(null);
+  renderer.clear();
+  renderer.render(postScene, postCam);
+}
+
+// ════════════════════════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════════════════════════
+updateChunks(camera.position.x, camera.position.z);
+requestAnimationFrame(loop);
+setTimeout(()=>{ const h=document.getElementById('hint'); if(h) h.style.opacity='0'; },5000);
+</script>
+</body>
+</html>
